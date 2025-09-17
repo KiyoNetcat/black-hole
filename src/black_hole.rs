@@ -22,7 +22,7 @@ pub struct BlackHole {
 	pub spatial: Spatial,
 	field: Field,
 	zone: Zone,
-	_visuals: Model,
+	visuals: Model,
 	open: bool,
 	animation_state: AnimationState,
 	entered: FxHashMap<u64, SpatialRef>,
@@ -35,19 +35,19 @@ impl BlackHole {
 		let field = Field::create(&spatial, Transform::identity(), Shape::Sphere(radius))?;
 		let zone = Zone::create(&spatial, Transform::from_scale([0.0; 3]), &field)?;
 
-		let _visuals = Model::create(
+		let visuals = Model::create(
 			&field,
 			Transform::from_scale([radius; 3]),
 			&ResourceID::new_namespaced("black_hole", "black_hole"),
 		)?;
 
-		field.set_local_transform(Transform::from_scale([0.0001; 3]))?;
+		field.set_local_transform(Transform::from_scale([0.0; 3]))?;
 
 		Ok(BlackHole {
 			spatial,
 			field,
 			zone,
-			_visuals,
+			visuals,
 			open: true,
 			animation_state: AnimationState::Idle,
 			entered: FxHashMap::default(),
@@ -81,7 +81,7 @@ impl BlackHole {
 		}
 		match &mut self.animation_state {
 			AnimationState::Expand(e) => {
-				self._visuals.set_enabled(true);
+				_ = self.visuals.set_enabled(true);
 				let scale = e.move_by(info.delta);
 
 				if self.open {
@@ -99,10 +99,6 @@ impl BlackHole {
 						for captured in self.captured.values() {
 							let _ = self.zone.release(captured);
 						}
-					} else {
-						for entered in self.entered.values() {
-							let _ = self.zone.capture(entered);
-						}
 					}
 				}
 			}
@@ -117,7 +113,7 @@ impl BlackHole {
 					.field
 					.set_local_transform(Transform::from_scale([scale.max(0.0001); 3]));
 				if c.is_finished() {
-					self._visuals.set_enabled(false);
+					_ = self.visuals.set_enabled(false);
 					self.animation_state = AnimationState::Idle;
 				}
 			}
@@ -127,6 +123,11 @@ impl BlackHole {
 	pub fn toggle(&mut self) {
 		self.open = !self.open;
 		self.animation_state = AnimationState::Expand(Tweener::expo_out_at(0.0, 1.0, 0.25, 0.0));
+		if !self.open {
+			for entered in self.entered.values() {
+				let _ = self.zone.capture(entered);
+			}
+		}
 	}
 	pub fn open_now(&mut self) {
 		let _ = self

@@ -148,7 +148,7 @@ pub async fn hand_transform(
 
 	Some((
 		anchor,
-		Transform::from_translation([0.0, -0.02, 0.03]),
+		Transform::from_translation_rotation([0.0, 0.03, 0.0], Quat::from_rotation_x(-FRAC_PI_2)),
 		tracked,
 	))
 }
