@@ -160,7 +160,7 @@ impl Drop for BlackHole {
 		// Reset spatial scale
 		let _ = self
 			.spatial
-			.set_local_transform(Transform::from_scale([0.0001; 3]));
+			.set_local_transform(Transform::from_scale([1.0; 3]));
 
 		// Release all captured objects
 		for (reparentable, locked) in self.captured.values() {

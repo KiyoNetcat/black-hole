@@ -14,9 +14,10 @@ use stardust_xr_fusion::{
 	ClientHandle,
 };
 use stardust_xr_molecules::tracked::TrackedProxy;
+use tokio::time::sleep;
 use std::{
 	f32::consts::{FRAC_PI_2, PI},
-	sync::{mpsc, Arc},
+	sync::{Arc, mpsc}, time::Duration,
 };
 use tokio_stream::StreamExt;
 
@@ -83,7 +84,9 @@ async fn main() {
 		_ = loop_future => {},
 		_ = tokio::signal::ctrl_c() => {}
 	};
+	drop(black_hole);
 	_ = client.try_flush().await;
+	sleep(Duration::from_millis(50)).await;
 }
 
 fn update_tracked_state(tracked: TrackedProxy<'static>, tx: mpsc::Sender<MinimizeButtonEvent>) {
