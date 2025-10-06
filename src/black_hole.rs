@@ -1,15 +1,18 @@
 use rustc_hash::FxHashMap;
 use stardust_xr_fusion::{
 	drawable::Model,
-	fields::{Field, Shape},
 	node::{NodeResult, NodeType},
-	root::FrameInfo,
-	spatial::{
-		Spatial, SpatialAspect, SpatialRef, SpatialRefAspect, Transform, Zone, ZoneAspect,
-		ZoneEvent,
+	objects::{
+		interfaces::{ReparentLockProxy, ReparentableProxy},
+		object_registry::ObjectRegistry,
+		ObjectInfo,
 	},
+	query::{ObjectQuery, QueryEvent},
+	root::FrameInfo,
+	spatial::{Spatial, SpatialAspect, SpatialRefAspect, Transform},
 	values::ResourceID,
 };
+use std::sync::Arc;
 use tween::{ExpoIn, ExpoOut, Tweener};
 
 pub enum AnimationState {
@@ -18,39 +21,45 @@ pub enum AnimationState {
 	Contract(Tweener<f32, f32, ExpoIn>),
 }
 
+type Query = (
+	ReparentableProxy<'static>,
+	Option<ReparentLockProxy<'static>>,
+);
 pub struct BlackHole {
 	pub spatial: Spatial,
-	field: Field,
-	zone: Zone,
-	visuals: Model,
+	spatial_id: u64,
+	query: ObjectQuery<Query, ()>,
+	_visuals: Model,
 	open: bool,
 	animation_state: AnimationState,
-	entered: FxHashMap<u64, SpatialRef>,
-	captured: FxHashMap<u64, Spatial>,
+	reparentable: FxHashMap<ObjectInfo, Query>,
+	captured: FxHashMap<ObjectInfo, Query>,
 }
 impl BlackHole {
-	pub fn new(spatial_parent: &impl SpatialRefAspect) -> NodeResult<BlackHole> {
+	pub async fn new(
+		spatial_parent: &impl SpatialRefAspect,
+		object_registry: Arc<ObjectRegistry>,
+	) -> NodeResult<BlackHole> {
 		let spatial = Spatial::create(spatial_parent, Transform::identity(), false)?;
-		let radius = 10.0;
-		let field = Field::create(&spatial, Transform::identity(), Shape::Sphere(radius))?;
-		let zone = Zone::create(&spatial, Transform::from_scale([0.0; 3]), &field)?;
+		let spatial_id = spatial.export_spatial().await?;
+		let query = ObjectQuery::new(object_registry, ());
 
-		let visuals = Model::create(
-			&field,
-			Transform::from_scale([radius; 3]),
+		let _visuals = Model::create(
+			&spatial,
+			Transform::from_scale([10.0; 3]),
 			&ResourceID::new_namespaced("black_hole", "black_hole"),
 		)?;
 
-		field.set_local_transform(Transform::from_scale([0.0; 3]))?;
+		spatial.set_local_transform(Transform::from_scale([0.0001; 3]))?;
 
 		Ok(BlackHole {
 			spatial,
-			field,
-			zone,
-			visuals,
+			spatial_id,
+			query,
+			_visuals,
 			open: true,
 			animation_state: AnimationState::Idle,
-			entered: FxHashMap::default(),
+			reparentable: FxHashMap::default(),
 			captured: FxHashMap::default(),
 		})
 	}
@@ -61,59 +70,80 @@ impl BlackHole {
 		!matches!(&self.animation_state, AnimationState::Idle)
 	}
 	pub fn frame(&mut self, info: &FrameInfo) {
-		let _ = self.zone.update();
-		while let Some(event) = self.zone.recv_zone_event() {
+		while let Ok(event) = self.query.try_recv_event() {
 			match event {
-				ZoneEvent::Enter { spatial } => {
-					self.entered.insert(spatial.node().id(), spatial);
+				QueryEvent::NewMatch(object_info, reparentable) => {
+					self.reparentable.insert(object_info, reparentable);
 				}
-				ZoneEvent::Capture { spatial } => {
-					let _ = spatial.set_spatial_parent_in_place(&self.zone);
-					self.captured.insert(spatial.node().id(), spatial);
+				QueryEvent::MatchModified(object_info, reparentable) => {
+					self.reparentable.insert(object_info, reparentable);
 				}
-				ZoneEvent::Release { id } => {
-					self.captured.remove(&id);
+				QueryEvent::MatchLost(object_info) => {
+					self.reparentable.remove(&object_info);
 				}
-				ZoneEvent::Leave { id } => {
-					self.entered.remove(&id);
-				}
+				QueryEvent::PhantomVariant(_) => (),
 			}
 		}
 		match &mut self.animation_state {
 			AnimationState::Expand(e) => {
-				_ = self.visuals.set_enabled(true);
+				let _ = self._visuals.set_enabled(true);
 				let scale = e.move_by(info.delta);
 
-				if self.open {
-					let _ = self
-						.zone
-						.set_local_transform(Transform::from_scale([scale; 3]));
-				}
+				// Apply scale to the spatial transform
 				let _ = self
-					.field
+					.spatial
 					.set_local_transform(Transform::from_scale([scale.max(0.0001); 3]));
+
 				if e.is_finished() {
 					self.animation_state =
 						AnimationState::Contract(Tweener::expo_in_at(1.0, 0.0, 0.25, 0.0));
+
 					if self.open {
-						for captured in self.captured.values() {
-							let _ = self.zone.release(captured);
+						// Opening: release captured objects back to their original parents
+						for (_, (reparentable, locked)) in self.captured.drain() {
+							if let Some(locked) = locked {
+								tokio::spawn(async move {
+									_ = locked.unlock().await;
+									_ = reparentable.unparent().await;
+								});
+							} else {
+								tokio::spawn(async move {
+									_ = reparentable.unparent().await;
+								});
+							}
+						}
+					} else {
+						// Closing: capture all available reparentable objects
+						for (object_info, (reparentable, locked)) in self.reparentable.iter() {
+							let reparentable = reparentable.clone();
+							let locked = locked.clone();
+							let spatial_id = self.spatial_id;
+
+							self.captured.insert(
+								object_info.clone(),
+								(reparentable.clone(), locked.clone()),
+							);
+
+							tokio::spawn(async move {
+								if let Some(locked) = &locked {
+									_ = locked.lock().await;
+								}
+								_ = reparentable.parent(spatial_id).await;
+							});
 						}
 					}
 				}
 			}
 			AnimationState::Contract(c) => {
 				let scale = c.move_by(info.delta);
-				if !self.open {
-					let _ = self
-						.zone
-						.set_local_transform(Transform::from_scale([scale; 3]));
-				}
+
+				// Apply scale to the spatial transform
 				let _ = self
-					.field
+					.spatial
 					.set_local_transform(Transform::from_scale([scale.max(0.0001); 3]));
+
 				if c.is_finished() {
-					_ = self.visuals.set_enabled(false);
+					let _ = self._visuals.set_enabled(false);
 					self.animation_state = AnimationState::Idle;
 				}
 			}
@@ -129,12 +159,25 @@ impl BlackHole {
 			}
 		}
 	}
-	pub fn open_now(&mut self) {
+}
+impl Drop for BlackHole {
+	fn drop(&mut self) {
+		// Reset spatial scale
 		let _ = self
-			.zone
-			.set_local_transform(Transform::from_scale([1.0; 3]));
-		for captured in self.captured.values() {
-			let _ = self.zone.release(captured);
+			.spatial
+			.set_local_transform(Transform::from_scale([0.0001; 3]));
+
+		// Release all captured objects
+		for (reparentable, locked) in self.captured.values() {
+			let reparentable = reparentable.clone();
+			let locked = locked.clone();
+
+			tokio::spawn(async move {
+				if let Some(locked) = locked {
+					_ = locked.unlock().await;
+				}
+				_ = reparentable.unparent().await;
+			});
 		}
 	}
 }

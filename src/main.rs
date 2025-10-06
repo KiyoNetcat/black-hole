@@ -2,14 +2,13 @@ pub mod black_hole;
 pub mod minimize;
 
 use black_hole::BlackHole;
-use color_eyre::eyre::Result;
 use glam::Quat;
 use manifest_dir_macros::directory_relative_path;
 use minimize::{MinimizeButton, MinimizeButtonEvent};
 use stardust_xr_fusion::{
 	client::Client,
 	core::schemas::zbus::{names::WellKnownName, Connection},
-	objects::SpatialRefProxyExt,
+	objects::{connect_client, object_registry::ObjectRegistry, SpatialRefProxyExt},
 	root::{RootAspect, RootEvent},
 	spatial::{SpatialRef, Transform},
 	ClientHandle,
@@ -22,7 +21,7 @@ use std::{
 use tokio_stream::StreamExt;
 
 #[tokio::main(flavor = "current_thread")]
-async fn main() -> Result<()> {
+async fn main() {
 	let client = Client::connect()
 		.await
 		.expect("Unable to connect to server");
@@ -30,20 +29,25 @@ async fn main() -> Result<()> {
 	let async_loop = client.async_event_loop();
 	client_handle
 		.get_root()
-		.set_base_prefixes(&[directory_relative_path!("res").to_owned()])?;
+		.set_base_prefixes(&[directory_relative_path!("res").to_owned()])
+		.unwrap();
+	let dbus_connection = connect_client().await.unwrap();
+	let object_registry = ObjectRegistry::new(&dbus_connection).await.unwrap();
 
-	let mut black_hole = BlackHole::new(client_handle.get_root())?;
+	let mut black_hole = BlackHole::new(client_handle.get_root(), object_registry)
+		.await
+		.unwrap();
 	let mut buttons: [Option<MinimizeButton>; 2] = [None, None];
 	let mut was_spawned = false;
 	if let Some((anchor, offset, tracked)) = controller_transform(&client_handle).await {
 		was_spawned = true;
-		let (button, tx) = MinimizeButton::new(&anchor, offset)?;
+		let (button, tx) = MinimizeButton::new(&anchor, offset).unwrap();
 		update_tracked_state(tracked, tx);
 		buttons[0] = Some(button);
 	};
 	if let Some((anchor, offset, tracked)) = hand_transform(&client_handle).await {
 		was_spawned = true;
-		let (button, tx) = MinimizeButton::new(&anchor, offset)?;
+		let (button, tx) = MinimizeButton::new(&anchor, offset).unwrap();
 		update_tracked_state(tracked, tx);
 		buttons[1] = Some(button);
 	}
@@ -53,11 +57,12 @@ async fn main() -> Result<()> {
 			MinimizeButton::new(
 				client_handle.get_root(),
 				Transform::from_translation([0.0, 0.0, -0.3]),
-			)?
+			)
+			.unwrap()
 			.0,
 		);
 	};
-	let mut client = async_loop.stop().await?;
+	let mut client = async_loop.stop().await.unwrap();
 	let loop_future = client.sync_event_loop(|client, _| {
 		while let Some(event) = client.get_root().recv_root_event() {
 			match event {
@@ -69,7 +74,7 @@ async fn main() -> Result<()> {
 				}
 				RootEvent::SaveState { response: _ } => {}
 				RootEvent::Ping { response } => {
-					response.send(Ok(()));
+					response.send_ok(());
 				}
 			}
 		}
@@ -78,9 +83,7 @@ async fn main() -> Result<()> {
 		_ = loop_future => {},
 		_ = tokio::signal::ctrl_c() => {}
 	};
-	black_hole.open_now();
 	_ = client.try_flush().await;
-	Ok(())
 }
 
 fn update_tracked_state(tracked: TrackedProxy<'static>, tx: mpsc::Sender<MinimizeButtonEvent>) {

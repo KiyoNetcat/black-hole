@@ -3,10 +3,9 @@ name = "black-hole"
 version = "0.1.0"
 edition = "2021"
 
-
 [dependencies]
 color-eyre = "0.6.3"
-glam = { version = "0.28.0", features = ["mint"] }
+glam = { version = "0.30.8", features = ["mint"] }
 manifest-dir-macros = "0.1.18"
 map-range = "0.1.2"
 mint = "0.5.9"
