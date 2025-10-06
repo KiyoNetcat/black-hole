@@ -153,11 +153,6 @@ impl BlackHole {
 	pub fn toggle(&mut self) {
 		self.open = !self.open;
 		self.animation_state = AnimationState::Expand(Tweener::expo_out_at(0.0, 1.0, 0.25, 0.0));
-		if !self.open {
-			for entered in self.entered.values() {
-				let _ = self.zone.capture(entered);
-			}
-		}
 	}
 }
 impl Drop for BlackHole {
