@@ -3,22 +3,23 @@ pub mod minimize;
 
 use black_hole::BlackHole;
 use glam::Quat;
-use manifest_dir_macros::directory_relative_path;
 use minimize::{MinimizeButton, MinimizeButtonEvent};
 use stardust_xr_fusion::{
 	client::Client,
 	core::schemas::zbus::{names::WellKnownName, Connection},
 	objects::{connect_client, object_registry::ObjectRegistry, SpatialRefProxyExt},
+	project_local_resources,
 	root::{RootAspect, RootEvent},
 	spatial::{SpatialRef, Transform},
 	ClientHandle,
 };
 use stardust_xr_molecules::tracked::TrackedProxy;
-use tokio::time::sleep;
 use std::{
 	f32::consts::{FRAC_PI_2, PI},
-	sync::{Arc, mpsc}, time::Duration,
+	sync::{mpsc, Arc},
+	time::Duration,
 };
+use tokio::time::sleep;
 use tokio_stream::StreamExt;
 
 #[tokio::main(flavor = "current_thread")]
@@ -26,14 +27,13 @@ async fn main() {
 	let client = Client::connect()
 		.await
 		.expect("Unable to connect to server");
+	client
+		.setup_resources(&[&project_local_resources!("res")])
+		.unwrap();
 	let client_handle = client.handle();
 	let async_loop = client.async_event_loop();
-	client_handle
-		.get_root()
-		.set_base_prefixes(&[directory_relative_path!("res").to_owned()])
-		.unwrap();
 	let dbus_connection = connect_client().await.unwrap();
-	let object_registry = ObjectRegistry::new(&dbus_connection).await.unwrap();
+	let object_registry = ObjectRegistry::new(&dbus_connection).await;
 
 	let mut black_hole = BlackHole::new(client_handle.get_root(), object_registry)
 		.await
