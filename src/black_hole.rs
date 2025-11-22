@@ -50,7 +50,7 @@ impl BlackHole {
 			&ResourceID::new_namespaced("black_hole", "black_hole"),
 		)?;
 
-		spatial.set_local_transform(Transform::from_scale([0.0001; 3]))?;
+		spatial.set_local_transform(Transform::from_scale([0.0; 3]))?;
 
 		Ok(BlackHole {
 			spatial,
@@ -92,7 +92,7 @@ impl BlackHole {
 				// Apply scale to the spatial transform
 				let _ = self
 					.spatial
-					.set_local_transform(Transform::from_scale([scale.max(0.0001); 3]));
+					.set_local_transform(Transform::from_scale([scale.max(0.0); 3]));
 
 				if e.is_finished() {
 					self.animation_state =
@@ -140,7 +140,7 @@ impl BlackHole {
 				// Apply scale to the spatial transform
 				let _ = self
 					.spatial
-					.set_local_transform(Transform::from_scale([scale.max(0.0001); 3]));
+					.set_local_transform(Transform::from_scale([scale.max(0.0); 3]));
 
 				if c.is_finished() {
 					let _ = self._visuals.set_enabled(false);
