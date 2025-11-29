@@ -1,6 +1,6 @@
 [package]
 name = "black-hole"
-version = "0.1.0"
+version = "0.50.0"
 edition = "2021"
 
 [dependencies]
@@ -12,11 +12,5 @@ tokio = { version = "1.38.0", default-features = false, features = ["rt"] }
 tokio-stream = { version = "0.1.17", features = ["signal"] }
 tween = { version = "2.0.3", features = ["glam"] }
 zbus = { version = "5.5.0", features = ["tokio"] }
-
-[dependencies.stardust-xr-fusion]
-git = "https://github.com/StardustXR/core.git"
-branch = "dev"
-
-[dependencies.stardust-xr-molecules]
-git = "https://github.com/StardustXR/molecules.git"
-branch = "dev"
+stardust-xr-fusion = "0.50.0"
+stardust-xr-molecules = "0.50.0"
