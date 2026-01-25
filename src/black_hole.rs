@@ -40,7 +40,7 @@ impl BlackHole {
 		spatial_parent: &impl SpatialRefAspect,
 		object_registry: Arc<ObjectRegistry>,
 	) -> NodeResult<BlackHole> {
-		let spatial = Spatial::create(spatial_parent, Transform::identity(), false)?;
+		let spatial = Spatial::create(spatial_parent, Transform::identity())?;
 		let spatial_id = spatial.export_spatial().await?;
 		let query = ObjectQuery::new(object_registry, ());
 

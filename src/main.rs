@@ -6,7 +6,7 @@ use glam::Quat;
 use minimize::{MinimizeButton, MinimizeButtonEvent};
 use stardust_xr_fusion::{
 	client::Client,
-	core::schemas::zbus::{names::WellKnownName, Connection},
+	interfaces::SpatialRefProxy,
 	objects::{connect_client, object_registry::ObjectRegistry, SpatialRefProxyExt},
 	project_local_resources,
 	root::{RootAspect, RootEvent},
@@ -21,6 +21,7 @@ use std::{
 };
 use tokio::time::sleep;
 use tokio_stream::StreamExt;
+use zbus::{names::WellKnownName, Connection};
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
@@ -30,6 +31,7 @@ async fn main() {
 	client
 		.setup_resources(&[&project_local_resources!("res")])
 		.unwrap();
+	let conn = Connection::session().await.unwrap();
 	let client_handle = client.handle();
 	let async_loop = client.async_event_loop();
 	let dbus_connection = connect_client().await.unwrap();
@@ -40,13 +42,13 @@ async fn main() {
 		.unwrap();
 	let mut buttons: [Option<MinimizeButton>; 2] = [None, None];
 	let mut was_spawned = false;
-	if let Some((anchor, offset, tracked)) = controller_transform(&client_handle).await {
+	if let Some((anchor, offset, tracked)) = controller_transform(&client_handle, &conn).await {
 		was_spawned = true;
 		let (button, tx) = MinimizeButton::new(&anchor, offset).unwrap();
 		update_tracked_state(tracked, tx);
 		buttons[0] = Some(button);
 	};
-	if let Some((anchor, offset, tracked)) = hand_transform(&client_handle).await {
+	if let Some((anchor, offset, tracked)) = hand_transform(&client_handle, &conn).await {
 		was_spawned = true;
 		let (button, tx) = MinimizeButton::new(&anchor, offset).unwrap();
 		update_tracked_state(tracked, tx);
@@ -105,9 +107,10 @@ fn update_tracked_state(tracked: TrackedProxy<'static>, tx: mpsc::Sender<Minimiz
 
 pub async fn controller_transform(
 	client: &Arc<ClientHandle>,
+	conn: &Connection,
 ) -> Option<(SpatialRef, Transform, TrackedProxy<'static>)> {
-	let anchor = stardust_xr_fusion::objects::interfaces::SpatialRefProxy::new(
-		&Connection::session().await.ok()?,
+	let anchor = SpatialRefProxy::new(
+		conn,
 		WellKnownName::from_static_str("org.stardustxr.Controllers").ok()?,
 		"/org/stardustxr/Controller/left",
 	)
@@ -116,7 +119,7 @@ pub async fn controller_transform(
 	.import(client)
 	.await?;
 	let tracked = TrackedProxy::new(
-		&Connection::session().await.ok()?,
+		conn,
 		WellKnownName::from_static_str("org.stardustxr.Controllers").ok()?,
 		"/org/stardustxr/Controller/left",
 	)
@@ -134,9 +137,10 @@ pub async fn controller_transform(
 }
 pub async fn hand_transform(
 	client: &Arc<ClientHandle>,
+	conn: &Connection,
 ) -> Option<(SpatialRef, Transform, TrackedProxy<'static>)> {
 	let anchor = stardust_xr_fusion::objects::interfaces::SpatialRefProxy::new(
-		&Connection::session().await.ok()?,
+		conn,
 		WellKnownName::from_static_str("org.stardustxr.Hands").ok()?,
 		"/org/stardustxr/Hand/left/palm",
 	)
@@ -145,7 +149,7 @@ pub async fn hand_transform(
 	.import(client)
 	.await?;
 	let tracked = TrackedProxy::new(
-		&Connection::session().await.ok()?,
+		conn,
 		WellKnownName::from_static_str("org.stardustxr.Hands").ok()?,
 		"/org/stardustxr/Hand/left",
 	)

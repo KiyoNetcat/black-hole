@@ -3,7 +3,9 @@ use std::sync::mpsc;
 use crate::black_hole::BlackHole;
 use color_eyre::eyre::Result;
 use stardust_xr_fusion::{
-	drawable::{Text, TextAspect, TextStyle, XAlign, YAlign}, node::OwnedAspect, spatial::{SpatialRef, SpatialRefAspect, Transform}
+	drawable::{Text, TextAspect, TextStyle, XAlign, YAlign},
+	node::OwnedAspect,
+	spatial::{SpatialRef, SpatialRefAspect, Transform},
 };
 use stardust_xr_molecules::{
 	button::{Button, ButtonSettings},

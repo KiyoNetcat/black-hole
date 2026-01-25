@@ -12,5 +12,7 @@ tokio = { version = "1.38.0", default-features = false, features = ["rt"] }
 tokio-stream = { version = "0.1.17", features = ["signal"] }
 tween = { version = "2.0.3", features = ["glam"] }
 zbus = { version = "5.5.0", features = ["tokio"] }
-stardust-xr-fusion = "0.50.0"
-stardust-xr-molecules = "0.50.0"
+# stardust-xr-fusion = "0.50.0"
+# stardust-xr-molecules = "0.50.0"
+stardust-xr-fusion.git = "https://github.com/StardustXR/core"
+stardust-xr-molecules.git = "https://github.com/StardustXR/molecules"
