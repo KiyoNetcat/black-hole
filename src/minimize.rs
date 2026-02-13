@@ -44,7 +44,7 @@ impl MinimizeButton {
 			// 	self.button.touch_plane().root(),
 			// 	Transform::from_translation([0.0, 0.0, -0.01]),
 			// );
-			black_hole.toggle();
+			black_hole.toggle(&self.get_button_spatial_ref());
 		}
 	}
 

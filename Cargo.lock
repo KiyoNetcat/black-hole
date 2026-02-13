@@ -1504,14 +1504,13 @@ dependencies = [
 [[package]]
 name = "stardust-xr-molecules"
 version = "0.50.0"
-source = "git+https://github.com/StardustXR/molecules#be09b47d0f2d5f78b9009586f5556f36b014b1ec"
+source = "git+https://github.com/StardustXR/molecules#4d59240537509201a03fd95269bc27c5b6372f47"
 dependencies = [
  "ashpd",
  "futures-util",
  "glam",
  "lazy_static",
  "lerp",
- "map-range",
  "rustc-hash",
  "serde",
  "stardust-xr-fusion",

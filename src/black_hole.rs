@@ -1,3 +1,4 @@
+use glam::Vec3;
 use rustc_hash::FxHashMap;
 use stardust_xr_fusion::{
 	drawable::Model,
@@ -26,7 +27,8 @@ type Query = (
 	Option<ReparentLockProxy<'static>>,
 );
 pub struct BlackHole {
-	pub spatial: Spatial,
+	target_spatial: Spatial,
+	reparent_spatial: Spatial,
 	spatial_id: u64,
 	query: ObjectQuery<Query, ()>,
 	_visuals: Model,
@@ -40,20 +42,21 @@ impl BlackHole {
 		spatial_parent: &impl SpatialRefAspect,
 		object_registry: Arc<ObjectRegistry>,
 	) -> NodeResult<BlackHole> {
-		let spatial = Spatial::create(spatial_parent, Transform::identity())?;
+		let target_spatial = Spatial::create(spatial_parent, Transform::identity())?;
+		let spatial = Spatial::create(&target_spatial, Transform::identity())?;
 		let spatial_id = spatial.export_spatial().await?;
 		let query = ObjectQuery::new(object_registry, ());
 
 		let _visuals = Model::create(
-			&spatial,
+			&target_spatial,
 			Transform::from_scale([10.0; 3]),
 			&ResourceID::new_namespaced("black_hole", "black_hole"),
 		)?;
 
-		spatial.set_local_transform(Transform::from_scale([0.0; 3]))?;
+		target_spatial.set_local_transform(Transform::from_scale([0.0; 3]))?;
 
 		Ok(BlackHole {
-			spatial,
+			reparent_spatial: spatial,
 			spatial_id,
 			query,
 			_visuals,
@@ -61,6 +64,7 @@ impl BlackHole {
 			animation_state: AnimationState::Idle,
 			reparentable: FxHashMap::default(),
 			captured: FxHashMap::default(),
+			target_spatial,
 		})
 	}
 	pub fn open(&self) -> bool {
@@ -91,7 +95,7 @@ impl BlackHole {
 
 				// Apply scale to the spatial transform
 				let _ = self
-					.spatial
+					.target_spatial
 					.set_local_transform(Transform::from_scale([scale.max(0.0); 3]));
 
 				if e.is_finished() {
@@ -139,7 +143,7 @@ impl BlackHole {
 
 				// Apply scale to the spatial transform
 				let _ = self
-					.spatial
+					.target_spatial
 					.set_local_transform(Transform::from_scale([scale.max(0.0); 3]));
 
 				if c.is_finished() {
@@ -150,29 +154,27 @@ impl BlackHole {
 			_ => (),
 		};
 	}
-	pub fn toggle(&mut self) {
+	pub fn toggle(&mut self, target: &impl SpatialRefAspect) {
+		_ = self
+			.target_spatial
+			.set_local_transform(Transform::from_scale(Vec3::ONE));
+		_ = self
+			.reparent_spatial
+			.set_spatial_parent_in_place(self.reparent_spatial.client().get_root());
+		_ = self
+			.target_spatial
+			.set_relative_transform(target, Transform::from_translation(Vec3::ZERO));
+		_ = self
+			.reparent_spatial
+			.set_spatial_parent_in_place(&self.target_spatial);
+		_ = self
+			.target_spatial
+			.set_local_transform(Transform::from_scale(if self.open {
+				Vec3::ONE
+			} else {
+				Vec3::ZERO
+			}));
 		self.open = !self.open;
 		self.animation_state = AnimationState::Expand(Tweener::expo_out_at(0.0, 1.0, 0.25, 0.0));
-	}
-}
-impl Drop for BlackHole {
-	fn drop(&mut self) {
-		// Reset spatial scale
-		let _ = self
-			.spatial
-			.set_local_transform(Transform::from_scale([1.0; 3]));
-
-		// Release all captured objects
-		for (reparentable, locked) in self.captured.values() {
-			let reparentable = reparentable.clone();
-			let locked = locked.clone();
-
-			tokio::spawn(async move {
-				if let Some(locked) = locked {
-					_ = locked.unlock().await;
-				}
-				_ = reparentable.unparent().await;
-			});
-		}
 	}
 }
