@@ -13,6 +13,13 @@
     packages = forAllSystems (system: let pkgs = nixpkgsFor.${system}; craneLib = crane.mkLib pkgs; in {
       default = craneLib.buildPackage {
         src = ./.;
+
+        STARDUST_RES_PREFIXES = pkgs.stdenvNoCC.mkDerivation {
+          name = "resources";
+          src = ./.;
+
+          buildPhase = "cp -r $src/data/org.stardustxr.BlackHole $out";
+        };
       };
     });
   };
