@@ -18,7 +18,10 @@
           name = "resources";
           src = ./.;
 
-          buildPhase = "cp -r $src/data/org.stardustxr.BlackHole $out";
+          installPhase = ''
+            mkdir -p $out/org.stardustxr.BlackHole
+            install -Dm0644 $src/data/org.stardustxr.BlackHole/* $out/org.stardustxr.BlackHole
+          '';
         };
       };
     });
